@@ -1,4 +1,4 @@
-name: Forest
+name: Forest_cam
 
 defaults:
   # see https://hydra.cc/docs/advanced/overriding_packages/
@@ -18,8 +18,9 @@ drone_model:
 
 time_encoding: true
 
-lidar_range: 4.
-lidar_vfov: [-10., 20.]
+
+camera_type: rgb
+image_resolution: [224, 224]
 
 action_transform: null
 

@@ -79,7 +79,7 @@ class IsaacEnv(EnvBase):
     env_ns = "/World/envs"
     template_env_ns = "/World/envs/env_0"
 
-    REGISTRY: Dict[str, Type["IsaacEnv"]] = {}
+    REGISTRY: Dict[str, Type["IsaacEnv"]] = {} # 定义了一个名为 REGISTRY 的字典，用于注册和存储不同类型的 IsaacEnv 环境。REGISTRY 是一个字典，键是字符串，值是 IsaacEnv 类型或其子类。Dict[str, Type["IsaacEnv"]] 表示这个字典的键是字符串类型，值是 IsaacEnv 类或其子类的类型。
 
     def __init__(self, cfg, headless):
         super().__init__(

@@ -31,11 +31,11 @@ from omni_drones.utils.torch import euler_to_quaternion, quat_axis
 
 from tensordict.tensordict import TensorDict, TensorDictBase
 from torchrl.data import UnboundedContinuousTensorSpec, CompositeSpec, DiscreteTensorSpec
-
+from omni_drones.sensors.camera import Camera, PinholeCameraCfg
 from omni.isaac.core.utils.viewports import set_camera_view
 
 
-class Forest(IsaacEnv):
+class Forest_cam(IsaacEnv):
     r"""
     This is a single-agent task where the agent is required to navigate a randomly
     generated cluttered environment. The agent needs to fly at a commanded speed
@@ -52,7 +52,7 @@ class Forest(IsaacEnv):
     - `"state"` (16 + `num_rotors`): The basic information of the drone
       (except its position), containing its rotation (in quaternion), velocities
       (linear and angular), heading and up vectors, and the current throttle.
-    - `"lidar"` (1, w, h) : The lidar scan of the drone. The size is decided by the
+    - `"image"` (3, w, h) : The image of the drone. The size is decided by the
       field of view and resolution.
 
     ## Reward
@@ -97,11 +97,9 @@ class Forest(IsaacEnv):
         self.randomization = cfg.task.get("randomization", {})
         self.has_payload = "payload" in self.randomization.keys()
 
-        super().__init__(cfg, headless)
+        super().__init__(cfg, headless) # 在父类中调用了_design_scene()方法
 
-        self.lidar._initialize_impl()
-        self.lidar_resolution = (36, 4)
-
+        self.camera.initialize(f"/World/envs/env_.*/Hummingbird_0/base_link/Camera") # 源代码中就直接默认了Hummingbird，下面也有几处固定值
         self.drone.initialize()
         if "drone" in self.randomization:
             self.drone.setup_randomization(self.randomization["drone"])
@@ -191,22 +189,19 @@ class Forest(IsaacEnv):
         )
         terrain: TerrainImporter = terrain_cfg.class_type(terrain_cfg)
 
-        self.lidar_vfov = (
-            max(-89., self.cfg.task.lidar_vfov[0]),
-            min(89., self.cfg.task.lidar_vfov[1])
+        self.image_resolution = (
+            self.cfg.task.image_resolution[0],
+            self.cfg.task.image_resolution[1]
         )
-        self.lidar_range = self.cfg.task.lidar_range
-        ray_caster_cfg = RayCasterCfg(
-            prim_path="/World/envs/env_.*/Hummingbird_0/base_link",
-            offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
-            attach_yaw_only=False,
-            pattern_cfg=patterns.BpearlPatternCfg(
-                vertical_ray_angles=torch.linspace(*self.lidar_vfov, 4)
-            ),
-            debug_vis=False,
-            mesh_prim_paths=["/World/ground"],
+        self.camera_type = self.cfg.task.camera_type
+        camera_cfg = PinholeCameraCfg(
+            sensor_tick=0,
+            resolution=self.image_resolution,
+            data_types=[self.camera_type],
         )
-        self.lidar: RayCaster = ray_caster_cfg.class_type(ray_caster_cfg)
+        # cameras used as sensors    
+        self.camera = Camera(camera_cfg)
+        self.camera.spawn([f"/World/envs/env_.*/Hummingbird_0/base_link"])
         return ["/World/ground"]
 
     def _set_specs(self):
@@ -217,7 +212,7 @@ class Forest(IsaacEnv):
             "agents": CompositeSpec({
                 "observation": CompositeSpec({
                     "state": UnboundedContinuousTensorSpec((observation_dim,), device=self.device),
-                    "lidar": UnboundedContinuousTensorSpec((1, 36, 4), device=self.device),
+                    "image": UnboundedContinuousTensorSpec((3 if self.camera_type == "rgb" else 1, *self.image_resolution), device=self.device),
                 }),
                 "intrinsics": self.drone.intrinsics_spec.to(self.device)
             }).expand(self.num_envs)
@@ -271,38 +266,30 @@ class Forest(IsaacEnv):
         self.effort = self.drone.apply_action(actions.unsqueeze(1))
 
     def _post_sim_step(self, tensordict: TensorDictBase):
-        self.lidar.update(self.dt)
+        # self.lidar.update(self.dt)
+        pass
 
     def _compute_state_and_obs(self):
         self.drone_state = self.drone.get_state(env_frame=False)
         # relative position and heading
         self.rpos = self.target_pos - self.drone_state[..., :3]
 
-        self.lidar_scan = self.lidar_range - (
-            (self.lidar.data.ray_hits_w - self.lidar.data.pos_w.unsqueeze(1))
-            .norm(dim=-1)
-            .clamp_max(self.lidar_range)
-            .reshape(self.num_envs, 1, *self.lidar_resolution)
-        )
+        self.image_frame = self.camera.get_images().cpu()["rgb"].float()
 
         distance = self.rpos.norm(dim=-1, keepdim=True)
         rpos_clipped = self.rpos / distance.clamp(1e-6)
         obs = {
             "state": torch.cat([rpos_clipped, self.drone_state[..., 3:]], dim=-1).squeeze(1),
-            "lidar": self.lidar_scan
+            "image": self.image_frame
         }
 
         if self._should_render(0):
             self.debug_draw.clear()
-            x = self.drone.data.pos_w[0]
+            x = self.drone.pos[0].squeeze()
             set_camera_view(
                 eye=x.cpu() + torch.as_tensor(self.cfg.viewer.eye),
                 target=x.cpu() + torch.as_tensor(self.cfg.viewer.lookat)
             )
-            # 以下函数为画出雷达线
-            # v = (self.lidar.data.ray_hits_w[0] - x).reshape(*self.lidar_resolution, 3)
-            # self.debug_draw.vector(x.expand_as(v[:, 0]), v[:, 0])
-            # self.debug_draw.vector(x.expand_as(v[:, -1]), v[:, -1])
 
         return TensorDict(
             {
@@ -323,7 +310,7 @@ class Forest(IsaacEnv):
         distance = self.rpos.norm(dim=-1, keepdim=True)
         vel_direction = self.rpos / distance.clamp_min(1e-6)
 
-        reward_safety = torch.log(self.lidar_range-self.lidar_scan).mean(dim=(2, 3))
+        # reward_safety = torch.log(self.lidar_range-self.lidar_scan).mean(dim=(2, 3))
         reward_vel = (self.drone.vel_w[..., :3] * vel_direction).sum(-1).clip(max=2.0)
 
         reward_up = torch.square((self.drone.up[..., 2] + 1) / 2)
@@ -331,22 +318,20 @@ class Forest(IsaacEnv):
         # effort
         # reward_effort = self.reward_effort_weight * torch.exp(-self.effort)
 
-        reward = reward_vel + reward_up + 1. + reward_safety * 0.2
+        reward = reward_vel + reward_up + 1. #+ reward_safety * 0.2
 
-        # 表示一个布尔张量，若以下条件都满足则为True，否则为False即出现missbehave
         misbehave = (
             (self.drone.pos[..., 2] < 0.2)
             | (self.drone.pos[..., 2] > 4.)
             | (self.drone.vel_w[..., :3].norm(dim=-1) > 2.5)
-            | (einops.reduce(self.lidar_scan, "n 1 w h -> n 1", "max") >  (self.lidar_range - 0.3))
+            # | (einops.reduce(self.lidar_scan, "n 1 w h -> n 1", "max") >  (self.lidar_range - 0.3))
         )
-        # 检查是否出现nan值
         hasnan = torch.isnan(self.drone_state).any(-1)
 
         terminated = misbehave | hasnan
         truncated = (self.progress_buf >= self.max_episode_length).unsqueeze(-1)
 
-        self.stats["safety"].add_(reward_safety)
+        # self.stats["safety"].add_(reward_safety)
         self.stats["return"] += reward
         self.stats["episode_len"][:] = self.progress_buf.unsqueeze(1)
 

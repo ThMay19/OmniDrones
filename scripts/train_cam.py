@@ -66,7 +66,7 @@ class PPOPolicy(TensorDictModuleBase):
 
         # 这段代码定义了一个顺序模块 self.encoder，它首先使用卷积神经网络处理激光雷达数据，然后将处理后的特征与状态特征连接起来，最后通过多层感知器进一步处理连接后的特征。
         self.encoder = TensorDictSequential(
-            TensorDictModule(cnn, [("agents", "observation", "lidar")], ["_cnn_feature"]),
+            TensorDictModule(cnn, [("agents", "observation", "image")], ["_cnn_feature"]),
             CatTensors(["_cnn_feature", ("agents", "observation", "state")], "_feature", del_keys=False),
             TensorDictModule(mlp, ["_feature"], ["_feature"]),
         ).to(self.device)

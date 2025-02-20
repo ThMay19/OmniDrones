@@ -46,7 +46,7 @@ class PPOConfig:
     name: str = "ppo"
     train_every: int = 32
     ppo_epochs: int = 4
-    num_minibatches: int = 16
+    num_minibatches: int = 8
 
     # whether to use privileged information
     priv_actor: bool = False

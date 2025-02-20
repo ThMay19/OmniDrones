@@ -72,10 +72,11 @@ class Camera:
 
     def spawn(
         self,
-        prim_paths: Sequence[str],
+        prim_paths_expr: Sequence[str],
         translations=None,
         targets=None,
     ):
+        prim_paths = [path + '/Camera' for i in prim_paths_expr for path in prim_utils.find_matching_prim_paths(i)]
         n = len(prim_paths)
 
         self.prim_paths = prim_paths
@@ -141,7 +142,7 @@ class Camera:
                 if img_tensor.dim() == 2:
                     img_tensor = img_tensor.unsqueeze(0)
                 else:
-                    img_tensor = img_tensor.permute(2, 0, 1)
+                    img_tensor = img_tensor[:, :, :3].permute(2, 0, 1)
                 images_dict[k] = img_tensor
             images_list.append(TensorDict(images_dict, []))
         return torch.stack(images_list)
