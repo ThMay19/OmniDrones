@@ -248,7 +248,7 @@ class IsaacEnv(EnvBase):
             env_mask = tensordict.get("_reset").reshape(self.num_envs)
         else:
             env_mask = torch.ones(self.num_envs, dtype=bool, device=self.device)
-        env_ids = env_mask.nonzero().squeeze(-1)
+        env_ids = env_mask.nonzero().squeeze(-1) # nonzero() 返回非零元素的索引，squeeze(-1) 去掉维度为 1 的维度
         self._reset_idx(env_ids)
         # self.sim.step(render=False)
         self.progress_buf[env_ids] = 0.

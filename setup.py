@@ -16,6 +16,7 @@ setup(
         "pandas",
         "moviepy",
         "av",
-        "torchrl==0.3.1", # for torch==2.2.2
+        "tensordict==0.4.0",
+        "torchrl==0.4.0"# # for torch==2.4.0
     ],
 )

@@ -427,7 +427,7 @@ class RigidPrimView(_RigidPrimView):
         linear_velocities: Optional[torch.Tensor] = None,
         angular_velocities: Optional[torch.Tensor] = None,
         track_contact_forces: bool = False,
-        prepare_contact_sensors: bool = True,
+        prepare_contact_sensors: bool = False,
         disable_stablization: bool = True,
         contact_filter_prim_paths_expr: Optional[List[str]] = (),
         shape: Tuple[int, ...] = (-1,),

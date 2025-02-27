@@ -38,7 +38,15 @@ def init_simulation_app(cfg):
     #     app_experience = f"{os.environ['EXP_PATH']}/omni.isaac.sim.python.gym.headless.kit"
     # else:
     #     app_experience = f"{os.environ['EXP_PATH']}/omni.isaac.sim.python.kit"
-    app_experience = f"{os.environ['EXP_PATH']}/omni.isaac.sim.python.kit"
+    if cfg["headless"] and cfg["enable_images"]:
+        app_experience = f"{os.environ['ISAACLAB_APP_PATH']}/isaaclab.python.headless.rendering.kit"
+    elif cfg["headless"]:
+        app_experience = f"{os.environ['ISAACLAB_APP_PATH']}/isaaclab.python.headless.kit"
+    else:
+        if cfg["enable_images"]:
+            app_experience = f"{os.environ['ISAACLAB_APP_PATH']}/isaaclab.python.rendering.kit"
+        else:
+            app_experience = f"{os.environ['ISAACLAB_APP_PATH']}/isaaclab.python.kit"
     simulation_app = SimulationApp(config, experience=app_experience)
     # simulation_app = SimulationApp(config)
     return simulation_app

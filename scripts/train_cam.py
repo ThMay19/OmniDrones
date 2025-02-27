@@ -64,7 +64,7 @@ class PPOPolicy(TensorDictModuleBase):
         )
         mlp = make_mlp([256, 256])
 
-        # 这段代码定义了一个顺序模块 self.encoder，它首先使用卷积神经网络处理激光雷达数据，然后将处理后的特征与状态特征连接起来，最后通过多层感知器进一步处理连接后的特征。
+        # 这段代码定义了一个顺序模块 self.encoder，它首先使用卷积神经网络处理image数据，然后将处理后的特征与状态特征连接起来，最后通过多层感知器进一步处理连接后的特征。
         self.encoder = TensorDictSequential(
             TensorDictModule(cnn, [("agents", "observation", "image")], ["_cnn_feature"]),
             CatTensors(["_cnn_feature", ("agents", "observation", "state")], "_feature", del_keys=False),
@@ -131,7 +131,7 @@ class PPOPolicy(TensorDictModuleBase):
 
         infos = []
         for epoch in range(self.cfg.ppo_epochs):
-            batch = make_batch(tensordict, self.cfg.num_minibatches)
+            batch = make_batch(tensordict, self.cfg.num_minibatches) # make_batch函数将数据集分成多个小批次
             for minibatch in batch:
                 infos.append(self._update(minibatch))
 

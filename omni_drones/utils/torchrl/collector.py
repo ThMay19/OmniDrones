@@ -70,7 +70,9 @@ class SyncDataCollector(_SyncDataCollector):
                     *excluded_keys, inplace=True
                 )
             if self.return_same_td:
-                yield tensordict_out
+                # 生成器函数，yield tensordict_out 用于返回一个 TensorDictBase 对象，并暂停函数的执行状态。
+                # 每次调用生成器对象的 __next__() 方法时，函数会从暂停的地方继续执行，直到遇到下一个 yield 或函数结束。
+                yield tensordict_out 
             else:
                 # we must clone the values, as the tensordict is updated in-place.
                 # otherwise the following code may break:

@@ -99,7 +99,7 @@ class Forest_cam(IsaacEnv):
 
         super().__init__(cfg, headless) # 在父类中调用了_design_scene()方法
 
-        self.camera.initialize(f"/World/envs/env_.*/Hummingbird_0/base_link/Camera") # 源代码中就直接默认了Hummingbird，下面也有几处固定值
+        self.camera._initialize_impl()
         self.drone.initialize()
         if "drone" in self.randomization:
             self.drone.setup_randomization(self.randomization["drone"])
@@ -130,7 +130,7 @@ class Forest_cam(IsaacEnv):
 
         import omni.isaac.lab.sim as sim_utils
         from omni.isaac.lab.assets import AssetBaseCfg
-        from omni.isaac.lab.sensors import RayCaster, RayCasterCfg, patterns
+        from omni.isaac.lab.sensors import CameraCfg, Camera
         from omni.isaac.lab.terrains import (
             TerrainImporterCfg,
             TerrainImporter,
@@ -194,14 +194,19 @@ class Forest_cam(IsaacEnv):
             self.cfg.task.image_resolution[1]
         )
         self.camera_type = self.cfg.task.camera_type
-        camera_cfg = PinholeCameraCfg(
-            sensor_tick=0,
-            resolution=self.image_resolution,
-            data_types=[self.camera_type],
-        )
+        camera_cfg = CameraCfg(
+        prim_path="/World/envs/env_.*/Hummingbird_0/base_link/front_cam",
+        update_period=0.1,
+        height=224,
+        width=224,
+        data_types=["rgb", "distance_to_image_plane"],
+        spawn=sim_utils.PinholeCameraCfg(
+            focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 1.0e5)
+        ),
+        offset=CameraCfg.OffsetCfg(pos=(0.510, 0.0, 0.015), rot=(0.5, -0.5, 0.5, -0.5), convention="ros"),
+    )
         # cameras used as sensors    
-        self.camera = Camera(camera_cfg)
-        self.camera.spawn([f"/World/envs/env_.*/Hummingbird_0/base_link"])
+        self.camera: Camera = camera_cfg.class_type(camera_cfg)
         return ["/World/ground"]
 
     def _set_specs(self):
@@ -267,14 +272,24 @@ class Forest_cam(IsaacEnv):
 
     def _post_sim_step(self, tensordict: TensorDictBase):
         # self.lidar.update(self.dt)
-        pass
+        self.camera.update(self.dt)
 
     def _compute_state_and_obs(self):
         self.drone_state = self.drone.get_state(env_frame=False)
         # relative position and heading
         self.rpos = self.target_pos - self.drone_state[..., :3]
 
-        self.image_frame = self.camera.get_images().cpu()["rgb"].float()
+        self.image_frame = self.camera.data.output["rgb"].permute(0, 3, 1, 2).float()
+
+        # from PIL import Image
+        # import numpy as np
+        # # 转换张量的形状为 (H, W, C)
+        # tensor = self.image_frame[0].permute(1, 2, 0).cpu().numpy()  # 转换为 NumPy 数组
+        # tensor = (tensor * 255).astype(np.uint8)  # 转换为 [0, 255] 范围的整数
+
+        # # 使用 Pillow 保存图片
+        # image = Image.fromarray(tensor)  # 将 NumPy 数组转换为 PIL 图像对象
+        # image.save("output_image.png")  # 保存为 PNG 格式
 
         distance = self.rpos.norm(dim=-1, keepdim=True)
         rpos_clipped = self.rpos / distance.clamp(1e-6)

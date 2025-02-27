@@ -294,7 +294,7 @@ class Forest(IsaacEnv):
 
         if self._should_render(0):
             self.debug_draw.clear()
-            x = self.drone.data.pos_w[0]
+            x = self.lidar.data.pos_w[0]
             set_camera_view(
                 eye=x.cpu() + torch.as_tensor(self.cfg.viewer.eye),
                 target=x.cpu() + torch.as_tensor(self.cfg.viewer.lookat)
